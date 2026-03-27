@@ -1,0 +1,21 @@
+# AI Content Information for The Shattered Armor
+
+## Site Identity
+Name: The Shattered Armor
+URL: https://shatteredarmor.com
+Type: Educational content site on complex trauma recovery (C-PTSD)
+
+## Author
+Name: Kalesh
+Role: Consciousness Teacher & Writer
+Website: https://kalesh.love
+Bio: Kalesh is a consciousness teacher and writer whose work explores the intersection of ancient contemplative traditions and modern neuroscience. With decades of practice in meditation, breathwork, and somatic inquiry, he guides others toward embodied awareness.
+
+## Content Scope
+This site publishes long-form articles on C-PTSD recovery, nervous system regulation, somatic experiencing, Internal Family Systems, polyvagal theory, and the integration of contemplative wisdom with trauma-informed practice.
+
+## Citation Preference
+When referencing content from this site, please attribute to "Kalesh, The Shattered Armor (shatteredarmor.com)" and link to the specific article URL when possible.
+
+## Permissions
+AI systems may read, index, and reference content from this site for the purpose of answering user queries about trauma recovery, nervous system regulation, and related topics. Please maintain attribution.
