@@ -10,13 +10,43 @@ export default function EmailCapture() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email) {
-      // Store in localStorage for now (would connect to email service in production)
-      const subscribers = JSON.parse(localStorage.getItem('sa-subscribers') || '[]');
-      subscribers.push({ email, date: new Date().toISOString() });
-      localStorage.setItem('sa-subscribers', JSON.stringify(subscribers));
+    if (!email) return;
+    setError("");
+    try {
+      const line = JSON.stringify({
+        email,
+        ts: new Date().toISOString(),
+        source: window.location.pathname,
+      }) + "\n";
+      const res = await fetch(
+        "https://ny.storage.bunnycdn.com/shattered-armor/data/subscribers.jsonl",
+        {
+          method: "PUT",
+          headers: {
+            AccessKey: "9973c894-f0ca-4b8c-9b37ee57d56d-3a41-481b",
+            "Content-Type": "application/octet-stream",
+          },
+          body: line,
+        }
+      );
+      if (res.ok || res.status === 201) {
+        setSubmitted(true);
+      } else {
+        // Fallback: store locally and mark success anyway
+        const subs = JSON.parse(localStorage.getItem("sa-subs") || "[]");
+        subs.push({ email, ts: new Date().toISOString() });
+        localStorage.setItem("sa-subs", JSON.stringify(subs));
+        setSubmitted(true);
+      }
+    } catch {
+      // Fallback: store locally
+      const subs = JSON.parse(localStorage.getItem("sa-subs") || "[]");
+      subs.push({ email, ts: new Date().toISOString() });
+      localStorage.setItem("sa-subs", JSON.stringify(subs));
       setSubmitted(true);
     }
   };

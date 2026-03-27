@@ -11,6 +11,7 @@ import About from "./pages/About";
 import WhereAmI from "./pages/WhereAmI";
 import Privacy from "./pages/Privacy";
 import Disclaimer from "./pages/Disclaimer";
+import CookieBanner from "./components/CookieBanner";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function App() {
         <TooltipProvider>
           <Toaster />
           <Router />
+          <CookieBanner />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
