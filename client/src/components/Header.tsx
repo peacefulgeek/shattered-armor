@@ -74,6 +74,15 @@ export default function Header() {
           <Link href="/where-am-i" className={`px-4 py-1.5 text-sm uppercase tracking-wider transition-colors no-underline ${location === '/where-am-i' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'}`} style={{ fontFamily: 'var(--font-sans)' }}>
             Where Am I?
           </Link>
+          <Link href="/tools" className={`px-4 py-1.5 text-sm uppercase tracking-wider transition-colors no-underline ${location === '/tools' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'}`} style={{ fontFamily: 'var(--font-sans)' }}>
+            Tools
+          </Link>
+          <Link href="/quizzes" className={`px-4 py-1.5 text-sm uppercase tracking-wider transition-colors no-underline ${location === '/quizzes' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'}`} style={{ fontFamily: 'var(--font-sans)' }}>
+            Quizzes
+          </Link>
+          <Link href="/assessments" className={`px-4 py-1.5 text-sm uppercase tracking-wider transition-colors no-underline ${location === '/assessments' ? 'text-foreground font-bold' : 'text-muted-foreground hover:text-foreground'}`} style={{ fontFamily: 'var(--font-sans)' }}>
+            Assessments
+          </Link>
         </div>
 
         {/* Mobile nav toggle */}
@@ -95,6 +104,9 @@ export default function Header() {
             ))}
             <Link href="/about" onClick={() => setMobileOpen(false)} className="block px-4 py-2 text-sm uppercase tracking-wider no-underline text-muted-foreground">About</Link>
             <Link href="/where-am-i" onClick={() => setMobileOpen(false)} className="block px-4 py-2 text-sm uppercase tracking-wider no-underline text-muted-foreground">Where Am I?</Link>
+            <Link href="/tools" onClick={() => setMobileOpen(false)} className="block px-4 py-2 text-sm uppercase tracking-wider no-underline text-muted-foreground">Tools</Link>
+            <Link href="/quizzes" onClick={() => setMobileOpen(false)} className="block px-4 py-2 text-sm uppercase tracking-wider no-underline text-muted-foreground">Quizzes</Link>
+            <Link href="/assessments" onClick={() => setMobileOpen(false)} className="block px-4 py-2 text-sm uppercase tracking-wider no-underline text-muted-foreground">Assessments</Link>
           </div>
         )}
       </nav>

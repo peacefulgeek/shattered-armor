@@ -11,6 +11,9 @@ import About from "./pages/About";
 import WhereAmI from "./pages/WhereAmI";
 import Privacy from "./pages/Privacy";
 import Disclaimer from "./pages/Disclaimer";
+import Tools from "./pages/Tools";
+import Quizzes from "./pages/Quizzes";
+import Assessments from "./pages/Assessments";
 import CookieBanner from "./components/CookieBanner";
 
 function Router() {
@@ -23,6 +26,9 @@ function Router() {
       <Route path="/where-am-i" component={WhereAmI} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/disclaimer" component={Disclaimer} />
+      <Route path="/tools" component={Tools} />
+      <Route path="/quizzes" component={Quizzes} />
+      <Route path="/assessments" component={Assessments} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

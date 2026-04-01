@@ -43,6 +43,9 @@ export default function Footer() {
               <li><Link href="/where-am-i" className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline">Where Am I Right Now?</Link></li>
               <li><Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline">Privacy Policy</Link></li>
               <li><Link href="/disclaimer" className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline">Disclaimer</Link></li>
+              <li><Link href="/tools" className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline">Tools We Recommend</Link></li>
+              <li><Link href="/quizzes" className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline">Quizzes</Link></li>
+              <li><Link href="/assessments" className="text-sm text-muted-foreground hover:text-foreground transition-colors no-underline">Assessments</Link></li>
             </ul>
           </div>
         </div>
@@ -56,6 +59,10 @@ export default function Footer() {
 
         <p className="text-xs text-muted-foreground text-center mt-4">
           &copy; {new Date().getFullYear()} {SITE.editorial}. All rights reserved.
+        </p>
+
+        <p className="text-xs text-muted-foreground text-center mt-3">
+          As an Amazon Associate I earn from qualifying purchases.
         </p>
       </div>
     </footer>

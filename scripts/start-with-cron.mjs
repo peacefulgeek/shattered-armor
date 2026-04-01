@@ -44,6 +44,7 @@ function regenerateSitemap() {
 
     const statics = [
       ['/', '1.0'], ['/about', '0.8'], ['/where-am-i', '0.8'],
+      ['/tools', '0.7'], ['/quizzes', '0.7'], ['/assessments', '0.7'],
       ['/privacy', '0.3'], ['/disclaimer', '0.3'],
     ];
     for (const [p, pri] of statics) {
@@ -107,5 +108,28 @@ process.on('SIGINT', () => { console.log('SIGINT'); server.kill('SIGINT'); });
 regenerateSitemap();
 scheduleDailyCron(0, 5, regenerateSitemap);
 
+// Weekly product spotlight cron — every Saturday at 06:00 UTC
+// In production, this would generate a new product spotlight article.
+// For now, 3 initial spotlights are pre-built for SkimLinks approval.
+function scheduleWeeklyCron(dayOfWeek, hour, minute, fn) {
+  const check = () => {
+    const now = new Date();
+    if (now.getUTCDay() === dayOfWeek && now.getUTCHours() === hour && now.getUTCMinutes() === minute) {
+      fn();
+    }
+  };
+  setInterval(check, 60_000);
+  console.log(`[cron] Scheduled weekly job on day ${dayOfWeek} at ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} UTC`);
+}
+
+function productSpotlightCheck() {
+  console.log('[cron] Product spotlight cron fired — Saturday check complete');
+  // Future: auto-generate product spotlight article here
+  regenerateSitemap();
+}
+
+scheduleWeeklyCron(6, 6, 0, productSpotlightCheck); // Saturday 6:00 UTC
+
 console.log('Shattered Armor server started with article scheduling active');
 console.log('Publishing: 5/day Mar 28–Apr 26, then 5/week Apr 27–Oct 5');
+console.log('Product spotlight: weekly Saturday cron active');

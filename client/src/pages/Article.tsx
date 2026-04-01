@@ -2,6 +2,7 @@
  * Article Page — 3-column broadsheet layout with lazy loading
  * Desktop: 20% ToC | 55% body | 25% sidebar
  * Drop-cap first paragraph, pull quotes, gold rules
+ * AuthorBioCard top-right, HealthDisclaimer bottom, AffiliateDisclosure if Amazon links
  */
 
 import { useMemo, useEffect, useState } from "react";
@@ -10,10 +11,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EmailCapture from "@/components/EmailCapture";
 import SEOHead from "@/components/SEOHead";
+import AffiliateDisclosure from "@/components/AffiliateDisclosure";
+import HealthDisclaimer from "@/components/HealthDisclaimer";
+import AuthorBioCard from "@/components/AuthorBioCard";
 import { SITE, formatDate, isPublished, type Article as ArticleType, type ArticleIndex } from "@/lib/articles";
 import articlesIndex from "@/data/articles-index.json";
 
-// Lazy load individual article files
 const articleModules = import.meta.glob("@/data/articles/*.json");
 
 export default function Article() {
@@ -47,7 +50,6 @@ export default function Article() {
       .slice(0, 5);
   }, [article]);
 
-  // Extract ToC headings from HTML content
   useEffect(() => {
     if (!article?.htmlContent) return;
     const parser = new DOMParser();
@@ -60,7 +62,11 @@ export default function Article() {
     setTocHeadings(headings);
   }, [article]);
 
-  // Process HTML to add IDs to h2s and drop-cap to first paragraph
+  const hasAmazonLinks = useMemo(() => {
+    if (!article?.htmlContent) return false;
+    return article.htmlContent.includes('amazon.com/dp/');
+  }, [article]);
+
   const processedHtml = useMemo(() => {
     if (!article?.htmlContent) return '';
     let html = article.htmlContent;
@@ -196,21 +202,23 @@ export default function Article() {
             </aside>
 
             {/* Center: Article Body */}
-            <div className="article-body min-w-0" dangerouslySetInnerHTML={{ __html: processedHtml }} />
+            <div className="min-w-0">
+              {hasAmazonLinks && <AffiliateDisclosure />}
+              <div className="article-body" dangerouslySetInnerHTML={{ __html: processedHtml }} />
+              <HealthDisclaimer />
+            </div>
 
             {/* Right: Sidebar */}
             <aside className="hidden lg:block">
-              <div className="sticky top-8 space-y-8">
-                {/* Author Box */}
-                <div className="p-5" style={{ background: 'oklch(0.97 0.01 85)', borderLeft: '3px solid oklch(0.75 0.12 85)' }}>
-                  <h4 className="text-sm uppercase tracking-widest font-bold mb-2" style={{ fontFamily: 'var(--font-sans)' }}>About the Author</h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    <a href={SITE.authorLink} className="font-bold text-foreground no-underline">{SITE.author}</a> is a {SITE.authorTitle.toLowerCase()} whose work explores the intersection of ancient contemplative traditions and modern neuroscience.
-                  </p>
-                  <a href={SITE.authorLink} className="inline-block mt-3 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors no-underline">
-                    Visit kalesh.love &rarr;
-                  </a>
-                </div>
+              <div className="sticky top-8 space-y-6">
+                {/* Author Bio Card with Image */}
+                <AuthorBioCard />
+
+                {/* Tools Recommendation */}
+                <Link href="/tools" className="block p-4 rounded-lg border no-underline hover:border-foreground/20 transition-colors" style={{ background: 'oklch(0.97 0.005 80)', borderColor: 'oklch(0.88 0.03 80)' }}>
+                  <h4 className="text-sm font-semibold mb-1" style={{ fontFamily: 'var(--font-serif)' }}>Tools We Recommend</h4>
+                  <p className="text-xs text-muted-foreground">Curated books, journals, and resources for your healing journey.</p>
+                </Link>
 
                 {/* Related Articles */}
                 {relatedArticles.length > 0 && (
@@ -228,17 +236,11 @@ export default function Article() {
                     </div>
                   </div>
                 )}
-
-                {/* Disclaimer */}
-                <div className="text-xs text-muted-foreground leading-relaxed p-4" style={{ background: 'oklch(0.97 0.01 85)' }}>
-                  <strong>Disclaimer:</strong> {SITE.disclaimer}
-                </div>
               </div>
             </aside>
           </div>
         </div>
 
-        {/* Email Capture */}
         <EmailCapture />
       </main>
 

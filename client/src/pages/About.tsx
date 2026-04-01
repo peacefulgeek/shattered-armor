@@ -43,12 +43,24 @@ export default function About() {
 
             {/* Author Section */}
             <section className="mb-12">
-              <h2 className="text-2xl mb-4" style={{ fontFamily: 'var(--font-serif)' }}>
-                <a href={SITE.authorLink} className="no-underline hover:text-gold-dark transition-colors">{SITE.author}</a>
-              </h2>
-              <p className="text-sm uppercase tracking-widest text-muted-foreground mb-4" style={{ fontFamily: 'var(--font-sans)' }}>
-                {SITE.authorTitle}
-              </p>
+              <div className="flex flex-col sm:flex-row gap-6 items-start mb-6">
+                <img
+                  src="https://shattered-armor.b-cdn.net/images/kalesh-bio.webp"
+                  alt="Kalesh — Consciousness Teacher & Writer"
+                  className="w-32 h-32 rounded-lg object-cover object-top flex-shrink-0"
+                />
+                <div>
+                  <h2 className="text-2xl mb-2" style={{ fontFamily: 'var(--font-serif)' }}>
+                    <a href={SITE.authorLink} className="no-underline hover:text-gold-dark transition-colors">{SITE.author}</a>
+                  </h2>
+                  <p className="text-sm uppercase tracking-widest text-muted-foreground mb-2" style={{ fontFamily: 'var(--font-sans)' }}>
+                    {SITE.authorTitle}
+                  </p>
+                  <a href={SITE.authorLink} target="_blank" rel="noopener noreferrer" className="inline-block text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors no-underline">
+                    Visit kalesh.love &rarr;
+                  </a>
+                </div>
+              </div>
               <div className="article-body">
                 <p className="drop-cap">
                   {SITE.authorBio} Visit <a href={SITE.authorLink}>kalesh.love</a>.
