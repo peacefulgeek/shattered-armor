@@ -15,6 +15,8 @@ import AffiliateDisclosure from "@/components/AffiliateDisclosure";
 import HealthDisclaimer from "@/components/HealthDisclaimer";
 import AuthorBioCard from "@/components/AuthorBioCard";
 import { SITE, formatDate, isPublished, type Article as ArticleType, type ArticleIndex } from "@/lib/articles";
+import AutoAffiliates from "@/components/AutoAffiliates";
+import { injectAffiliateLinks } from "@/lib/inline-affiliate-links";
 import articlesIndex from "@/data/articles-index.json";
 
 const articleModules = import.meta.glob("@/data/articles/*.json");
@@ -62,14 +64,13 @@ export default function Article() {
     setTocHeadings(headings);
   }, [article]);
 
-  const hasAmazonLinks = useMemo(() => {
-    if (!article?.htmlContent) return false;
-    return article.htmlContent.includes('amazon.com/dp/');
-  }, [article]);
+  // Always true since AutoAffiliates injects Amazon links on every article
+  const hasAmazonLinks = true;
 
   const processedHtml = useMemo(() => {
     if (!article?.htmlContent) return '';
-    let html = article.htmlContent;
+    // Inject affiliate links naturally into article body (2-4 max)
+    let html = injectAffiliateLinks(article.htmlContent, article.title, article.category);
     let h2Index = 0;
     html = html.replace(/<h2([^>]*)>/g, () => {
       const id = `section-${h2Index}`;
@@ -205,6 +206,7 @@ export default function Article() {
             <div className="min-w-0">
               {hasAmazonLinks && <AffiliateDisclosure />}
               <div className="article-body" dangerouslySetInnerHTML={{ __html: processedHtml }} />
+              <AutoAffiliates articleTitle={article.title} articleCategory={article.category} />
               <HealthDisclaimer />
             </div>
 
