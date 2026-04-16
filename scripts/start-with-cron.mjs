@@ -363,18 +363,48 @@ const TOPIC_POOLS = {
 // ═══════════════════════════════════════════════════════════════════════
 const AFFILIATE_TAG = 'spankyspinola-20';
 const PRODUCT_RECS = [
-  { name: 'The Body Keeps the Score', asin: 'B00G3L1C2K', cat: ['the-body', 'the-wiring'] },
-  { name: 'Complex PTSD: From Surviving to Thriving', asin: 'B00HJBMDXK', cat: ['the-parts', 'the-return'] },
-  { name: 'No Bad Parts', asin: 'B08XXNFM1G', cat: ['the-parts'] },
-  { name: 'Waking the Tiger', asin: 'B005BUWBHM', cat: ['the-body', 'the-wiring'] },
-  { name: 'The Polyvagal Theory in Therapy', asin: 'B07DGMBLQK', cat: ['the-wiring'] },
-  { name: 'Radical Acceptance', asin: 'B000FC20MM', cat: ['the-return', 'the-parts'] },
-  { name: 'When the Body Says No', asin: 'B00BATIDDS', cat: ['the-body'] },
-  { name: 'It Didn\'t Start with You', asin: 'B01BKFHCM6', cat: ['the-wiring', 'the-triggers'] },
-  { name: 'Anchored', asin: 'B09GXNRFMW', cat: ['the-wiring', 'the-return'] },
-  { name: 'Trauma and Recovery', asin: 'B00JVST0N0', cat: ['the-return'] },
-  { name: 'Weighted Blanket 15lb', asin: 'B07MF3BQJG', cat: ['the-body', 'the-triggers'] },
-  { name: 'Acupressure Mat and Pillow Set', asin: 'B07D2C5TSF', cat: ['the-body'] },
+  // BOOKS
+  { name: 'The Body Keeps the Score', asin: 'B00G3L1C2K', cat: ['the-body','the-wiring','the-triggers'], intro: 'A book that many trauma survivors find genuinely helpful is' },
+  { name: 'Complex PTSD: From Surviving to Thriving', asin: 'B00HJBMDXK', cat: ['the-parts','the-return','the-triggers'], intro: 'One resource that often resonates deeply with C-PTSD survivors is' },
+  { name: 'No Bad Parts', asin: '1683646681', cat: ['the-parts','the-return'], intro: 'A gentle introduction to parts work that many people appreciate is' },
+  { name: 'Waking the Tiger', asin: '155643233X', cat: ['the-body','the-wiring'], intro: 'For those exploring somatic approaches, a book worth considering is' },
+  { name: 'The Polyvagal Theory in Therapy', asin: '0393712370', cat: ['the-wiring','the-body'], intro: 'A resource that helps make polyvagal theory practical is' },
+  { name: 'Radical Acceptance', asin: '0553380990', cat: ['the-return','the-parts'], intro: 'A gentle approach to working with shame and self-rejection is' },
+  { name: 'When the Body Says No', asin: '0470923350', cat: ['the-body','the-wiring'], intro: 'A book that connects the dots between stress and illness is' },
+  { name: 'It Didn\'t Start with You', asin: '1101980389', cat: ['the-wiring','the-triggers'], intro: 'If you are curious about inherited trauma patterns, you might find value in' },
+  { name: 'Anchored', asin: '0593420454', cat: ['the-wiring','the-return','the-body'], intro: 'A practical guide to working with your nervous system is' },
+  { name: 'Trauma and Recovery', asin: '0465087302', cat: ['the-return','the-parts'], intro: 'One of the foundational texts on trauma recovery is' },
+  { name: 'In an Unspoken Voice', asin: '1556439431', cat: ['the-body','the-wiring'], intro: 'Something worth exploring for those drawn to body-based healing is' },
+  { name: 'Healing the Fragmented Selves of Trauma Survivors', asin: '0415708230', cat: ['the-parts','the-triggers'], intro: 'For understanding how trauma fragments the self, a popular choice is' },
+  { name: 'Adult Children of Emotionally Immature Parents', asin: '1626251703', cat: ['the-parts','the-return','the-triggers'], intro: 'A book that many find validates their childhood experience is' },
+  { name: 'Running on Empty', asin: '161448242X', cat: ['the-parts','the-triggers'], intro: 'For understanding emotional neglect specifically, a helpful resource is' },
+  { name: 'Set Boundaries, Find Peace', asin: '0593192095', cat: ['the-return','the-parts'], intro: 'A practical guide to boundaries that many find accessible is' },
+  { name: 'What Happened to You?', asin: '1250223180', cat: ['the-wiring','the-return'], intro: 'A compassionate reframing of trauma that resonates with many is' },
+  { name: 'Self-Compassion', asin: '0061733520', cat: ['the-return','the-parts'], intro: 'A book that gently challenges the inner critic is' },
+  { name: 'Attached', asin: '1585429139', cat: ['the-return','the-triggers'], intro: 'For understanding your attachment patterns in relationships, a popular choice is' },
+  { name: 'Whole Again', asin: '0143133314', cat: ['the-return','the-triggers'], intro: 'For those recovering from toxic relationships, you might find helpful' },
+  { name: 'The Deepest Well', asin: '1328502678', cat: ['the-wiring','the-body'], intro: 'A book connecting childhood adversity to health outcomes is' },
+  // SUPPLEMENTS
+  { name: 'Nature Made Magnesium Glycinate 400mg', asin: 'B0BXMVHGFP', cat: ['the-body','the-wiring','the-triggers'], intro: 'One supplement that many people find calming for their nervous system is' },
+  { name: 'NOW L-Theanine 200mg', asin: 'B000H7P9M0', cat: ['the-triggers','the-wiring'], intro: 'For those looking for gentle nervous system support, something worth trying is' },
+  { name: 'Nordic Naturals Ultimate Omega', asin: 'B002CQU564', cat: ['the-wiring','the-body'], intro: 'For brain health and mood support, a well-regarded option is' },
+  { name: 'Jarrow Formulas Ashwagandha', asin: 'B0013OQGO6', cat: ['the-triggers','the-body'], intro: 'An adaptogen that some people find helpful for stress is' },
+  { name: 'Thorne Vitamin B Complex', asin: 'B00BKSQCEE', cat: ['the-body','the-wiring'], intro: 'For those dealing with fatigue from chronic stress, consider' },
+  // SENSORY TOOLS
+  { name: 'Loop Quiet Ear Plugs', asin: 'B0B1NFK3VQ', cat: ['the-triggers','the-body'], intro: 'A discreet option for reducing noise sensitivity is' },
+  { name: 'Spiky Sensory Ring Set', asin: 'B08GKQLVTF', cat: ['the-triggers','the-body'], intro: 'A grounding tool that many find helpful during anxious moments is' },
+  { name: 'Calm Strips Sensory Stickers', asin: 'B09BFGR8FP', cat: ['the-triggers','the-body'], intro: 'A discreet grounding tool you can stick anywhere is' },
+  { name: 'Acupressure Mat and Pillow Set', asin: 'B07FSFBP84', cat: ['the-body'], intro: 'A body tool that some find helpful for releasing chronic tension is' },
+  // JOURNALS & WORKBOOKS
+  { name: 'The Complex PTSD Workbook', asin: '1623158249', cat: ['the-parts','the-return','the-triggers'], intro: 'A structured workbook that many C-PTSD survivors find practical is' },
+  { name: 'The DBT Skills Workbook', asin: '1684034582', cat: ['the-triggers','the-parts'], intro: 'For building regulation skills, a well-regarded workbook is' },
+  { name: 'The Self-Compassion Workbook', asin: '1462526780', cat: ['the-return','the-parts'], intro: 'For practical self-compassion exercises, a popular workbook is' },
+  // BODY TOOLS
+  { name: 'TriggerPoint GRID Foam Roller', asin: 'B0040EGNIU', cat: ['the-body'], intro: 'A tool that many find helpful for releasing stored body tension is' },
+  { name: 'YnM Weighted Blanket 15 lbs', asin: 'B073429DV2', cat: ['the-body','the-triggers'], intro: 'A weighted blanket that many find calming for their nervous system is' },
+  { name: 'Manta Sleep Mask', asin: 'B07PRG2CQB', cat: ['the-body','the-triggers'], intro: 'A sleep mask that blocks all light for better rest is' },
+  { name: 'Breathing Necklace - Shift', asin: 'B0BN2KFWQY', cat: ['the-triggers','the-body'], intro: 'A breathing tool that helps slow the exhale for nervous system regulation is' },
+  { name: 'Stress Ball Set', asin: 'B0BY8YZWQP', cat: ['the-triggers'], intro: 'Simple stress balls that help release tension through the hands are' },
 ];
 
 function amazonUrl(asin) {
@@ -522,18 +552,34 @@ function generateArticleHTML(title, category) {
     }
   }
 
-  // Add 2-3 Amazon product recommendations naturally
+  // Add 3-4 Amazon product recommendations naturally INLINE in the article body
   const matchingProducts = PRODUCT_RECS.filter(p => p.cat.includes(category));
   const selectedProducts = randomPick(
-    matchingProducts.length >= 2 ? matchingProducts : PRODUCT_RECS,
-    randomInt(2, 3)
+    matchingProducts.length >= 4 ? matchingProducts : PRODUCT_RECS,
+    4
   );
+  const inlineProducts = Array.isArray(selectedProducts) ? selectedProducts : [selectedProducts];
 
-  if (Array.isArray(selectedProducts)) {
-    // Inline recommendation mid-article
-    const introPhrase = randomPick(PRODUCT_INTRO_PHRASES);
-    const inlineProd = selectedProducts[0];
-    html += `<p>${introPhrase} <a href="${amazonUrl(inlineProd.asin)}" target="_blank" rel="noopener noreferrer">${inlineProd.name}</a> (paid link). It is one of those resources that keeps showing up in clinical conversations for good reason.</p>\n\n`;
+  // Inject 3-4 inline product links at natural breakpoints
+  for (let pi = 0; pi < Math.min(4, inlineProducts.length); pi++) {
+    const prod = inlineProducts[pi];
+    const intro = prod.intro || randomPick(PRODUCT_INTRO_PHRASES);
+    const followUp = [
+      'It is one of those resources that keeps showing up in clinical conversations for good reason.',
+      'Many people working through similar patterns have found it genuinely useful.',
+      'It comes up often enough in recovery circles that it is worth mentioning here.',
+      'Not a magic fix, but a solid tool for the work we are describing.',
+    ];
+    html += `<p>${intro} <a href="${amazonUrl(prod.asin)}" target="_blank" rel="noopener noreferrer">${prod.name}</a> (paid link). ${randomPick(followUp)}</p>\n\n`;
+    // Add a content paragraph between product links so they don't stack
+    if (pi < 3 && pi < inlineProducts.length - 1) {
+      const bridgePhrases = [
+        `The pattern here connects to something ${refs[0].name} observed in ${refs[0].field}. When the system is running old programs, even small interventions can shift the trajectory.`,
+        `This is where the body-based work becomes important. The cognitive understanding matters, but it is the felt experience that actually rewires the pattern.`,
+        `What makes this particular area so interesting is that the research keeps confirming what survivors have been saying for decades. The body knows things the mind has not caught up to yet.`,
+      ];
+      html += `<p>${randomPick(bridgePhrases)}</p>\n\n`;
+    }
   }
 
   // Closing
