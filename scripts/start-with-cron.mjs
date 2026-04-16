@@ -383,18 +383,18 @@ const PRODUCT_RECS = [
   { name: 'Self-Compassion', asin: '0061733520', cat: ['the-return','the-parts'], intro: 'A book that gently challenges the inner critic is' },
   { name: 'Attached', asin: '1585429139', cat: ['the-return','the-triggers'], intro: 'For understanding your attachment patterns in relationships, a popular choice is' },
   { name: 'Whole Again', asin: '0143133314', cat: ['the-return','the-triggers'], intro: 'For those recovering from toxic relationships, you might find helpful' },
-  { name: 'The Deepest Well', asin: '1328502678', cat: ['the-wiring','the-body'], intro: 'A book connecting childhood adversity to health outcomes is' },
+  { name: 'The Deepest Well', asin: '1250223180', cat: ['the-wiring','the-body'], intro: 'A book connecting childhood adversity to health outcomes is' },
   // SUPPLEMENTS
-  { name: 'Nature Made Magnesium Glycinate 400mg', asin: 'B0BXMVHGFP', cat: ['the-body','the-wiring','the-triggers'], intro: 'One supplement that many people find calming for their nervous system is' },
+  { name: 'Doctors Best Magnesium Glycinate', asin: 'B000BD0RT0', cat: ['the-body','the-wiring','the-triggers'], intro: 'One supplement that many people find calming for their nervous system is' },
   { name: 'NOW L-Theanine 200mg', asin: 'B000H7P9M0', cat: ['the-triggers','the-wiring'], intro: 'For those looking for gentle nervous system support, something worth trying is' },
   { name: 'Nordic Naturals Ultimate Omega', asin: 'B002CQU564', cat: ['the-wiring','the-body'], intro: 'For brain health and mood support, a well-regarded option is' },
   { name: 'Jarrow Formulas Ashwagandha', asin: 'B0013OQGO6', cat: ['the-triggers','the-body'], intro: 'An adaptogen that some people find helpful for stress is' },
-  { name: 'Thorne Vitamin B Complex', asin: 'B00BKSQCEE', cat: ['the-body','the-wiring'], intro: 'For those dealing with fatigue from chronic stress, consider' },
+  { name: 'Vitamin B Complex Supplement', asin: 'B0013OQGO6', cat: ['the-body','the-wiring'], intro: 'For those dealing with fatigue from chronic stress, consider' },
   // SENSORY TOOLS
-  { name: 'Loop Quiet Ear Plugs', asin: 'B0B1NFK3VQ', cat: ['the-triggers','the-body'], intro: 'A discreet option for reducing noise sensitivity is' },
-  { name: 'Spiky Sensory Ring Set', asin: 'B08GKQLVTF', cat: ['the-triggers','the-body'], intro: 'A grounding tool that many find helpful during anxious moments is' },
-  { name: 'Calm Strips Sensory Stickers', asin: 'B09BFGR8FP', cat: ['the-triggers','the-body'], intro: 'A discreet grounding tool you can stick anywhere is' },
-  { name: 'Acupressure Mat and Pillow Set', asin: 'B07FSFBP84', cat: ['the-body'], intro: 'A body tool that some find helpful for releasing chronic tension is' },
+  { name: 'Loop Quiet 2 Ear Plugs', asin: 'B0D3V4V1KD', cat: ['the-triggers','the-body'], intro: 'A discreet option for reducing noise sensitivity is' },
+  { name: 'Amethyst Crystal Worry Stone', asin: 'B0969BJG53', cat: ['the-triggers','the-body'], intro: 'A grounding tool that many find helpful during anxious moments is' },
+  { name: 'Amethyst Worry Stone for Anxiety', asin: 'B0BBWBX4N3', cat: ['the-triggers','the-body'], intro: 'A discreet grounding tool you can keep in your pocket is' },
+  { name: 'ShaktiMat Acupressure Mat Set', asin: 'B09X6DNR4G', cat: ['the-body'], intro: 'A body tool that some find helpful for releasing chronic tension is' },
   // JOURNALS & WORKBOOKS
   { name: 'The Complex PTSD Workbook', asin: '1623158249', cat: ['the-parts','the-return','the-triggers'], intro: 'A structured workbook that many C-PTSD survivors find practical is' },
   { name: 'The DBT Skills Workbook', asin: '1684034582', cat: ['the-triggers','the-parts'], intro: 'For building regulation skills, a well-regarded workbook is' },
@@ -402,9 +402,9 @@ const PRODUCT_RECS = [
   // BODY TOOLS
   { name: 'TriggerPoint GRID Foam Roller', asin: 'B0040EGNIU', cat: ['the-body'], intro: 'A tool that many find helpful for releasing stored body tension is' },
   { name: 'YnM Weighted Blanket 15 lbs', asin: 'B073429DV2', cat: ['the-body','the-triggers'], intro: 'A weighted blanket that many find calming for their nervous system is' },
-  { name: 'Manta Sleep Mask', asin: 'B07PRG2CQB', cat: ['the-body','the-triggers'], intro: 'A sleep mask that blocks all light for better rest is' },
-  { name: 'Breathing Necklace - Shift', asin: 'B0BN2KFWQY', cat: ['the-triggers','the-body'], intro: 'A breathing tool that helps slow the exhale for nervous system regulation is' },
-  { name: 'Stress Ball Set', asin: 'B0BY8YZWQP', cat: ['the-triggers'], intro: 'Simple stress balls that help release tension through the hands are' },
+  { name: 'Contoured Sleep Mask', asin: 'B00K5NEPJY', cat: ['the-body','the-triggers'], intro: 'A sleep mask that blocks all light for better rest is' },
+  { name: 'Breathing Exercise Tool', asin: 'B09XS7JWHH', cat: ['the-triggers','the-body'], intro: 'A breathing tool that helps slow the exhale for nervous system regulation is' },
+  { name: 'Stress Relief Squeeze Balls', asin: 'B01AVDVHTI', cat: ['the-triggers'], intro: 'Simple stress balls that help release tension through the hands are' },
 ];
 
 function amazonUrl(asin) {
