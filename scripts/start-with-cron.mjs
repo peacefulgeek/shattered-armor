@@ -19,6 +19,7 @@
 
 import { spawn } from 'child_process';
 import fs from 'fs';
+import https from 'https';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -959,6 +960,163 @@ function scheduleIntervalCron(intervalDays, fn) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// ASIN HEALTH CHECK — Self-healing product link validation
+// Runs weekly Sunday 04:00 UTC. No API keys. HTTP GET only.
+// ═══════════════════════════════════════════════════════════════════════
+
+function checkASIN(asin) {
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'www.amazon.com',
+      path: `/dp/${asin}`,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'identity',
+      },
+      timeout: 15000,
+    };
+    const req = https.get(options, (res) => {
+      let body = '';
+      let bytesRead = 0;
+      res.on('data', (chunk) => { if (bytesRead < 100000) { body += chunk.toString(); bytesRead += chunk.length; } });
+      res.on('end', () => {
+        const status = res.statusCode;
+        if (status === 404) { resolve({ asin, ok: false, reason: '404', title: null }); return; }
+        if (body.includes('Robot Check') || body.includes('captcha') || body.includes('CAPTCHA')) { resolve({ asin, ok: true, reason: 'captcha-skip', title: null }); return; }
+        if (body.includes('did not match any products') || body.includes('no results for')) { resolve({ asin, ok: false, reason: 'no-match', title: null }); return; }
+        if (body.includes('Page Not Found') || body.includes('looking for something')) { resolve({ asin, ok: false, reason: 'page-not-found', title: null }); return; }
+        const titleMatch = body.match(/<title[^>]*>([^<]+)<\/title>/i);
+        let title = titleMatch ? titleMatch[1].trim().replace(/\s*[:\-]\s*Amazon\.com.*$/i, '').trim() : null;
+        if (title && (title === 'Amazon.com' || title.startsWith('Amazon.com:'))) { resolve({ asin, ok: false, reason: 'generic-page', title: null }); return; }
+        resolve({ asin, ok: true, reason: 'ok', title });
+      });
+    });
+    req.on('error', (err) => { resolve({ asin, ok: false, reason: `error: ${err.message}`, title: null }); });
+    req.on('timeout', () => { req.destroy(); resolve({ asin, ok: false, reason: 'timeout', title: null }); });
+  });
+}
+
+function sleepMs(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function extractAllASINs() {
+  const asinMap = new Map();
+  const asinRegex = /amazon\.com\/dp\/([A-Z0-9]{10})/g;
+  try {
+    const files = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('.json'));
+    for (const fname of files) {
+      const art = JSON.parse(fs.readFileSync(path.join(DATA_DIR, fname), 'utf-8'));
+      const content = art.htmlContent || '';
+      const category = art.category || 'the-return';
+      let match;
+      while ((match = asinRegex.exec(content)) !== null) {
+        const asin = match[1];
+        if (!asinMap.has(asin)) asinMap.set(asin, { files: [], categories: new Set() });
+        const entry = asinMap.get(asin);
+        if (!entry.files.includes(fname)) entry.files.push(fname);
+        entry.categories.add(category);
+      }
+    }
+  } catch (err) { console.error(`[asin-check] Extract failed: ${err.message}`); }
+  return asinMap;
+}
+
+function findReplacementASIN(brokenAsin, categories, brokenSet, verifiedSet) {
+  for (const cat of categories) {
+    const candidates = PRODUCT_RECS.filter(p => p.cat.includes(cat) && !brokenSet.has(p.asin) && verifiedSet.has(p.asin) && p.asin !== brokenAsin);
+    if (candidates.length > 0) return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+  const fallbacks = PRODUCT_RECS.filter(p => !brokenSet.has(p.asin) && verifiedSet.has(p.asin) && p.asin !== brokenAsin);
+  return fallbacks.length > 0 ? fallbacks[Math.floor(Math.random() * fallbacks.length)] : null;
+}
+
+function replaceASINInArticles(brokenAsin, replacement, affectedFiles) {
+  let totalSwaps = 0;
+  for (const fname of affectedFiles) {
+    const fpath = path.join(DATA_DIR, fname);
+    try {
+      const art = JSON.parse(fs.readFileSync(fpath, 'utf-8'));
+      let content = art.htmlContent || '';
+      if (content.includes(brokenAsin)) {
+        // Update link text to new product name
+        const linkRegex = new RegExp(`(<a[^>]*href="[^"]*${brokenAsin}[^"]*"[^>]*>)([^<]+)(</a>)`, 'g');
+        content = content.replace(linkRegex, `$1${replacement.name}$3`);
+        // Replace ASIN in URLs
+        content = content.replace(new RegExp(brokenAsin, 'g'), replacement.asin);
+        art.htmlContent = content;
+        fs.writeFileSync(fpath, JSON.stringify(art, null, 0));
+        totalSwaps++;
+      }
+    } catch (err) { console.error(`[asin-check] Update ${fname} failed: ${err.message}`); }
+  }
+  // Sync to dist
+  const distDir = path.join(DIST_PUBLIC, 'data', 'articles');
+  if (fs.existsSync(distDir)) {
+    for (const fname of affectedFiles) {
+      const src = path.join(DATA_DIR, fname);
+      const dst = path.join(distDir, fname);
+      if (fs.existsSync(src) && fs.existsSync(dst)) { try { fs.copyFileSync(src, dst); } catch (e) {} }
+    }
+  }
+  return totalSwaps;
+}
+
+async function weeklyASINHealthCheck() {
+  console.log('[asin-check] ═══════════════════════════════════════');
+  console.log('[asin-check] Weekly ASIN Health Check started');
+  const asinMap = extractAllASINs();
+  const uniqueASINs = [...asinMap.keys()];
+  console.log(`[asin-check] Found ${uniqueASINs.length} unique ASINs`);
+
+  const verified = new Set();
+  const broken = new Map();
+
+  for (let i = 0; i < uniqueASINs.length; i++) {
+    if (i > 0) await sleepMs(3000); // 3s between requests to avoid captcha
+    const result = await checkASIN(uniqueASINs[i]);
+    if (result.reason === 'captcha-skip') {
+      verified.add(result.asin); // Assume OK if captcha
+      console.log(`[asin-check] ${i + 1}/${uniqueASINs.length} ${result.asin} CAPTCHA (assumed OK)`);
+    } else if (result.ok) {
+      verified.add(result.asin);
+      console.log(`[asin-check] ${i + 1}/${uniqueASINs.length} ${result.asin} OK${result.title ? ` (${result.title.slice(0, 50)})` : ''}`);
+    } else {
+      broken.set(result.asin, result.reason);
+      console.log(`[asin-check] ${i + 1}/${uniqueASINs.length} ${result.asin} BROKEN (${result.reason})`);
+    }
+  }
+
+  console.log(`[asin-check] Results: ${verified.size} OK, ${broken.size} broken`);
+
+  if (broken.size > 0) {
+    console.log(`[asin-check] Auto-repairing ${broken.size} broken ASINs...`);
+    let totalRepaired = 0;
+    for (const [brokenAsin, reason] of broken) {
+      const entry = asinMap.get(brokenAsin);
+      if (!entry) continue;
+      const replacement = findReplacementASIN(brokenAsin, [...entry.categories], new Set(broken.keys()), verified);
+      if (replacement) {
+        const swaps = replaceASINInArticles(brokenAsin, replacement, entry.files);
+        console.log(`[asin-check] Replaced ${brokenAsin} with ${replacement.asin} (${replacement.name}) in ${swaps} articles`);
+        totalRepaired += swaps;
+      } else {
+        console.log(`[asin-check] No replacement for ${brokenAsin} (${entry.files.length} articles affected)`);
+      }
+    }
+    console.log(`[asin-check] Auto-repair complete: ${totalRepaired} files updated`);
+  }
+
+  // Write health report
+  const report = { timestamp: new Date().toISOString(), totalASINs: uniqueASINs.length, verified: verified.size, broken: Object.fromEntries(broken) };
+  try { fs.writeFileSync(path.join(DIST_PUBLIC, 'asin-health-report.json'), JSON.stringify(report, null, 2)); } catch (e) {}
+  try { fs.writeFileSync(path.join(__dirname, '..', 'client', 'src', 'data', 'asin-health-report.json'), JSON.stringify(report, null, 2)); } catch (e) {}
+  console.log('[asin-check] Weekly ASIN Health Check complete');
+  console.log('[asin-check] ═══════════════════════════════════════');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // START SERVER
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -992,12 +1150,14 @@ if (AUTO_GEN_ENABLED) {
   scheduleWeeklyCron(6, 6, 0, weeklyProductSpotlight);
   scheduleIntervalCron(30, contentRefresh30Day);
   scheduleIntervalCron(90, contentRevision90Day);
+  scheduleWeeklyCron(0, 4, 0, weeklyASINHealthCheck); // Sunday 04:00 UTC
 
   console.log('');
   console.log('=== THE SHATTERED ARMOR ===');
   console.log('AUTO-GENERATION: ON');
   console.log('  Daily 02:00 UTC: 5 new articles (in-code, no external APIs)');
   console.log('  Weekly Sat 06:00 UTC: product spotlight');
+  console.log('  Weekly Sun 04:00 UTC: ASIN health check + auto-repair');
   console.log('  Every 30 days: refresh 25 articles');
   console.log('  Every 90 days: revise 20 articles');
   console.log(`  Bunny CDN: ${BUNNY_CDN_HOST} (hardcoded)`);
