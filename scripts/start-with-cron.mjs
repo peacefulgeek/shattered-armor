@@ -8,20 +8,26 @@
  *   - 150 articles: 5/day from Mar 28 - Apr 26, 2026
  *   - 120 articles: 5/week from Apr 27 - Oct 5, 2026
  *
- * Auto-generation (AUTO_GEN_ENABLED = true):
- *   - Daily 02:00 UTC: generate 5 new articles from topic pool
- *   - Weekly Saturday 06:00 UTC: product spotlight article
- *   - Every 30 days: refresh 25 articles (expand + humanize)
- *   - Every 90 days: revise 20 articles (edit + add sentences)
+ * Auto-generation (AUTO_GEN_ENABLED = true, node-cron):
+ *   - cron-1: 0 6 * * 1-5   — Mon-Fri 06:00 UTC: 5 new articles from topic pool
+ *   - cron-2: 0 8 * * 6     — Saturday 08:00 UTC: product spotlight article
+ *   - cron-3: 0 3 1 * *     — 1st of month 03:00 UTC: refresh 25 articles
+ *   - cron-4: 0 4 1 1,4,7,10 * — quarterly 04:00 UTC: revise 20 articles
+ *   - cron-5: 0 5 * * 0     — Sunday 05:00 UTC: ASIN health check + auto-repair
+ *
+ * Quality gate: article-quality-gate.mjs validates all new/refreshed articles
+ * Amazon verify: amazon-verify.mjs with soft-404 detection for ASIN health
  *
  * Bunny CDN credentials hardcoded. No env vars needed.
  */
 
 import { spawn } from 'child_process';
+import cron from 'node-cron';
 import fs from 'fs';
 import https from 'https';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { runQualityGate, findFlaggedWords, AI_FLAGGED_WORDS } from './article-quality-gate.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -772,9 +778,17 @@ function dailyAutoGenerate() {
     }
 
     const article = generateArticle(topic, cat);
+    // Quality gate: validate before publishing
+    const gate = runQualityGate(article.htmlContent);
+    if (!gate.passed) {
+      console.warn(`[auto-gen] Quality gate FAILED for "${topic}": ${gate.failures.join(' | ')}`);
+      // Try once more with a different topic
+      continue;
+    }
     if (publishArticle(article)) {
       existingSlugs.add(article.slug);
       generated++;
+      console.log(`[auto-gen] Quality gate PASSED: ${article.slug} (${gate.wordCount} words, ${gate.amazonLinks} links)`);
     }
   }
 
@@ -894,10 +908,9 @@ function contentRevision90Day() {
       content = content.replace(/\u2014/g, ', ');
       content = content.replace(/—/g, ', ');
 
-      // Purge AI words
-      const aiWords = ['profound', 'transformative', 'holistic', 'nuanced', 'multifaceted', 'delve', 'tapestry', 'paradigm', 'utilize', 'facilitate', 'furthermore', 'moreover', 'additionally', 'unveil', 'pivotal', 'embark', 'seamless', 'realm', 'undeniable'];
-      for (const word of aiWords) {
-        const regex = new RegExp(`\\b${word}\\b`, 'gi');
+      // Purge AI words — uses full expanded list from quality gate
+      for (const word of AI_FLAGGED_WORDS) {
+        const regex = new RegExp(`\\b${word.replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&')}\\b`, 'gi');
         content = content.replace(regex, '');
       }
       // Clean up double spaces
@@ -919,45 +932,10 @@ function contentRevision90Day() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// SCHEDULERS — No external dependencies
+// SCHEDULERS — node-cron (no setTimeout overflow)
 // ═══════════════════════════════════════════════════════════════════════
-
-function scheduleDailyCron(hour, minute, fn) {
-  let lastRun = '';
-  const check = () => {
-    const now = new Date();
-    const key = now.toISOString().slice(0, 10);
-    if (now.getUTCHours() === hour && now.getUTCMinutes() === minute && lastRun !== key) {
-      lastRun = key;
-      try { fn(); } catch (e) { console.error(`[cron] Daily job failed: ${e.message}`); }
-    }
-  };
-  setInterval(check, 60_000);
-  console.log(`[cron] Daily at ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} UTC`);
-}
-
-function scheduleWeeklyCron(dayOfWeek, hour, minute, fn) {
-  let lastRun = '';
-  const check = () => {
-    const now = new Date();
-    const key = now.toISOString().slice(0, 10);
-    if (now.getUTCDay() === dayOfWeek && now.getUTCHours() === hour && now.getUTCMinutes() === minute && lastRun !== key) {
-      lastRun = key;
-      try { fn(); } catch (e) { console.error(`[cron] Weekly job failed: ${e.message}`); }
-    }
-  };
-  setInterval(check, 60_000);
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  console.log(`[cron] Weekly ${days[dayOfWeek]} at ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} UTC`);
-}
-
-function scheduleIntervalCron(intervalDays, fn) {
-  const ms = intervalDays * 24 * 60 * 60 * 1000;
-  setInterval(() => {
-    try { fn(); } catch (e) { console.error(`[cron] Interval job failed: ${e.message}`); }
-  }, ms);
-  console.log(`[cron] Every ${intervalDays} days`);
-}
+// All cron expressions use node-cron format: second minute hour day-of-month month day-of-week
+// This avoids the setTimeout 32-bit overflow bug that fires 30/90-day timers immediately.
 
 // ═══════════════════════════════════════════════════════════════════════
 // ASIN HEALTH CHECK — Self-healing product link validation
@@ -1139,27 +1117,57 @@ process.on('SIGTERM', () => { console.log('SIGTERM'); server.kill('SIGTERM'); })
 process.on('SIGINT', () => { console.log('SIGINT'); server.kill('SIGINT'); });
 
 // ═══════════════════════════════════════════════════════════════════════
-// SCHEDULE ALL CRONS
+// SCHEDULE ALL CRONS — node-cron (no setTimeout overflow)
 // ═══════════════════════════════════════════════════════════════════════
 
+// Run sitemap on startup
 regenerateSitemap();
-scheduleDailyCron(0, 5, regenerateSitemap);
+
+// Sitemap daily at 00:05 UTC
+cron.schedule('0 5 0 * * *', () => {
+  try { regenerateSitemap(); } catch (e) { console.error(`[cron] Sitemap failed: ${e.message}`); }
+}, { timezone: 'UTC' });
+console.log('[cron] Sitemap: 0 5 0 * * * (daily 00:05 UTC)');
 
 if (AUTO_GEN_ENABLED) {
-  scheduleDailyCron(2, 0, dailyAutoGenerate);
-  scheduleWeeklyCron(6, 6, 0, weeklyProductSpotlight);
-  scheduleIntervalCron(30, contentRefresh30Day);
-  scheduleIntervalCron(90, contentRevision90Day);
-  scheduleWeeklyCron(0, 4, 0, weeklyASINHealthCheck); // Sunday 04:00 UTC
+  // cron-1: Article generation Mon-Fri at 06:00 UTC
+  cron.schedule('0 6 * * 1-5', () => {
+    try { dailyAutoGenerate(); } catch (e) { console.error(`[cron] Daily gen failed: ${e.message}`); }
+  }, { timezone: 'UTC' });
+  console.log('[cron] Article gen: 0 6 * * 1-5 (weekdays 06:00 UTC)');
+
+  // cron-2: Product spotlight Saturday at 08:00 UTC
+  cron.schedule('0 8 * * 6', () => {
+    try { weeklyProductSpotlight(); } catch (e) { console.error(`[cron] Spotlight failed: ${e.message}`); }
+  }, { timezone: 'UTC' });
+  console.log('[cron] Product spotlight: 0 8 * * 6 (Sat 08:00 UTC)');
+
+  // cron-3: Monthly content refresh — 1st of every month at 03:00 UTC
+  cron.schedule('0 3 1 * *', () => {
+    try { contentRefresh30Day(); } catch (e) { console.error(`[cron] Monthly refresh failed: ${e.message}`); }
+  }, { timezone: 'UTC' });
+  console.log('[cron] Monthly refresh: 0 3 1 * * (1st of month 03:00 UTC)');
+
+  // cron-4: Quarterly deep revision — 1st of Jan, Apr, Jul, Oct at 04:00 UTC
+  cron.schedule('0 4 1 1,4,7,10 *', () => {
+    try { contentRevision90Day(); } catch (e) { console.error(`[cron] Quarterly revision failed: ${e.message}`); }
+  }, { timezone: 'UTC' });
+  console.log('[cron] Quarterly revision: 0 4 1 1,4,7,10 * (quarterly 04:00 UTC)');
+
+  // cron-5: ASIN health check — Sunday at 05:00 UTC
+  cron.schedule('0 5 * * 0', () => {
+    weeklyASINHealthCheck().catch(e => console.error(`[cron] ASIN check failed: ${e.message}`));
+  }, { timezone: 'UTC' });
+  console.log('[cron] ASIN health: 0 5 * * 0 (Sun 05:00 UTC)');
 
   console.log('');
   console.log('=== THE SHATTERED ARMOR ===');
-  console.log('AUTO-GENERATION: ON');
-  console.log('  Daily 02:00 UTC: 5 new articles (in-code, no external APIs)');
-  console.log('  Weekly Sat 06:00 UTC: product spotlight');
-  console.log('  Weekly Sun 04:00 UTC: ASIN health check + auto-repair');
-  console.log('  Every 30 days: refresh 25 articles');
-  console.log('  Every 90 days: revise 20 articles');
+  console.log('AUTO-GENERATION: ON (node-cron, no setTimeout overflow)');
+  console.log('  cron-1: 0 6 * * 1-5   — 5 new articles weekdays 06:00 UTC');
+  console.log('  cron-2: 0 8 * * 6     — product spotlight Sat 08:00 UTC');
+  console.log('  cron-3: 0 3 1 * *     — monthly refresh 25 articles');
+  console.log('  cron-4: 0 4 1 1,4,7,10 * — quarterly revision 20 articles');
+  console.log('  cron-5: 0 5 * * 0     — ASIN health check + auto-repair');
   console.log(`  Bunny CDN: ${BUNNY_CDN_HOST} (hardcoded)`);
   console.log(`  Current articles: ${getArticleCount()}`);
   console.log(`  Topic pool: ${Object.values(TOPIC_POOLS).flat().length} topics`);

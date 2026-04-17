@@ -2,13 +2,13 @@ services:
   - type: web
     name: shattered-armor
     runtime: node
-    plan: free
+    plan: starter
     buildCommand: pnpm install && pnpm build
     startCommand: NODE_ENV=production node scripts/start-with-cron.mjs
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3000
-    healthCheckPath: /
+        value: "10000"
+    healthCheckPath: /health
     autoDeploy: true
