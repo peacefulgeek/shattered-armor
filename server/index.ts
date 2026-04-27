@@ -10,6 +10,16 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // 301 redirect: www → non-www (canonical domain for SEO)
+  app.use((req, res, next) => {
+    const host = req.hostname || req.headers.host || "";
+    if (host.startsWith("www.")) {
+      const bare = host.replace(/^www\./, "");
+      return res.redirect(301, `https://${bare}${req.originalUrl}`);
+    }
+    next();
+  });
+
   // Health check endpoint — required by Render
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
