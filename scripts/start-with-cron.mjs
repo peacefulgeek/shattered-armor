@@ -1,14 +1,20 @@
 /**
  * Render start script — The Shattered Armor
- * DeepSeek V4-Pro powered content generation + Bunny CDN image library.
+ * Queue-based publishing + DeepSeek V4-Pro fallback generation.
  * No Claude. No Fal.ai. No GPT.
  *
- * Writing engine: DeepSeek V4-Pro via OpenAI-compatible SDK
- * Image strategy: 40 pre-generated library images rotated + duplicated per article
+ * PUBLISHING MODEL:
+ *   436 pre-written articles sit in a queue (dateISO = 2099-01-01T00:00:00Z).
+ *   The cron picks from the queue by queuePosition and publishes by setting
+ *   dateISO to today's date. Once the queue is empty, falls back to DeepSeek.
  *
- * Smart Ramp-Up Cron Schedule:
- *   Phase 1 (< 200 articles): 3/weekday at 08:00, 12:00, 17:00 UTC
- *   Phase 2 (>= 200 articles): 1/weekday at 08:00 UTC
+ * RELEASE SCHEDULE:
+ *   Phase 1 (first 60 articles): 5/day every day = 12 days to clear
+ *   Phase 2 (remaining ~376): 1/weekday Mon-Fri = ~75 weeks
+ *   Fallback: DeepSeek V4-Pro generation when queue is empty
+ *
+ * Cron Schedule:
+ *   cron-1: 0 8 * * *     — Daily 08:00 UTC: publish from queue (5/day or 1/day)
  *   cron-2: 0 8 * * 6     — Saturday 08:00 UTC: product spotlight article
  *   cron-3: 0 3 1 * *     — 1st of month 03:00 UTC: refresh 25 articles
  *   cron-4: 0 4 1 1,4,7,10 * — quarterly 04:00 UTC: revise 20 articles
@@ -18,7 +24,7 @@
  * Amazon verify: amazon-verify.mjs with soft-404 detection for ASIN health
  *
  * Bunny CDN credentials hardcoded. No env vars needed.
- * DeepSeek API key: process.env.DEEPSEEK_API_KEY
+ * DeepSeek API key: process.env.DEEPSEEK_API_KEY (only needed when queue is empty)
  */
 
 import { spawn } from 'child_process';
@@ -868,19 +874,162 @@ function regenerateSitemap() {
   }
 }
 
-// Smart ramp-up: generate 1 article per call (called 3x/day < 200, 1x/day >= 200)
-async function dailyAutoGenerate() {
+// ═══════════════════════════════════════════════════════════════════════
+// QUEUE-BASED PUBLISHING
+// Phase 1 (first 60 articles): 5/day every day
+// Phase 2 (remaining ~376): 1/weekday Mon-Fri
+// Fallback: DeepSeek V4-Pro generation when queue is empty
+// ═══════════════════════════════════════════════════════════════════════
+
+const QUEUE_SENTINEL = '2099-01-01T00:00:00Z';
+const PHASE_1_THRESHOLD = 60; // First 60 articles at 5/day
+const PHASE_1_PER_DAY = 5;
+const PHASE_2_PER_DAY = 1;
+
+function getQueuedArticles() {
+  // Read index and find all queued articles sorted by queuePosition
+  const indexPath = path.join(__dirname, '..', 'client', 'src', 'data', 'articles-index.json');
+  try {
+    const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+    return index
+      .filter(a => a.publishStatus === 'queued' || a.dateISO === QUEUE_SENTINEL)
+      .sort((a, b) => (a.queuePosition || 999) - (b.queuePosition || 999));
+  } catch (e) {
+    console.error(`[queue] Failed to read index: ${e.message}`);
+    return [];
+  }
+}
+
+function getPublishedFromQueueCount() {
+  // Count how many articles have been published from the queue so far
+  // (articles with ID > 303 that are NOT queued anymore)
+  const indexPath = path.join(__dirname, '..', 'client', 'src', 'data', 'articles-index.json');
+  try {
+    const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+    return index.filter(a => a.id > 303 && a.publishStatus !== 'queued' && a.dateISO !== QUEUE_SENTINEL).length;
+  } catch (e) { return 0; }
+}
+
+function publishFromQueue(article) {
+  // Publish a queued article by updating its dateISO to now
+  const now = new Date();
+  const todayISO = now.toISOString();
+  const slug = article.slug;
+
+  // Update the article JSON file
+  const articlePath = path.join(DATA_DIR, `${slug}.json`);
+  try {
+    const art = JSON.parse(fs.readFileSync(articlePath, 'utf-8'));
+    art.dateISO = todayISO;
+    art.publishStatus = 'published';
+    delete art.queuePosition;
+    fs.writeFileSync(articlePath, JSON.stringify(art, null, 0));
+  } catch (e) {
+    console.error(`[queue] Failed to update article file ${slug}: ${e.message}`);
+    return false;
+  }
+
+  // Update all copies of articles-index.json
+  const indexPaths = [
+    path.join(__dirname, '..', 'client', 'src', 'data', 'articles-index.json'),
+    path.join(DIST_PUBLIC, 'data', 'articles-index.json'),
+    path.join(__dirname, '..', 'client', 'public', 'data', 'articles-index.json'),
+  ];
+
+  for (const idxPath of indexPaths) {
+    if (fs.existsSync(idxPath)) {
+      try {
+        const index = JSON.parse(fs.readFileSync(idxPath, 'utf-8'));
+        const entry = index.find(a => a.slug === slug);
+        if (entry) {
+          entry.dateISO = todayISO;
+          entry.publishStatus = 'published';
+          delete entry.queuePosition;
+        }
+        fs.writeFileSync(idxPath, JSON.stringify(index));
+      } catch (e) {
+        console.error(`[queue] Index update failed ${idxPath}: ${e.message}`);
+      }
+    }
+  }
+
+  // Copy to dist if it exists
+  const distDir = path.join(DIST_PUBLIC, 'data', 'articles');
+  if (fs.existsSync(distDir)) {
+    try {
+      const art = JSON.parse(fs.readFileSync(articlePath, 'utf-8'));
+      fs.writeFileSync(path.join(distDir, `${slug}.json`), JSON.stringify(art, null, 0));
+    } catch (e) {}
+  }
+
+  console.log(`[queue] Published from queue: "${article.title}" (pos ${article.queuePosition})`);
+  return true;
+}
+
+async function dailyPublishFromQueue() {
   if (!AUTO_GEN_ENABLED) return;
 
+  const queued = getQueuedArticles();
+  const publishedSoFar = getPublishedFromQueueCount();
+
+  console.log(`[queue] ═══════════════════════════════════════`);
+  console.log(`[queue] Daily publish triggered`);
+  console.log(`[queue] Queue remaining: ${queued.length}`);
+  console.log(`[queue] Published from queue so far: ${publishedSoFar}`);
+
+  // If queue is empty, fall back to DeepSeek generation
+  if (queued.length === 0) {
+    console.log(`[queue] Queue empty! Falling back to DeepSeek generation.`);
+    await dailyAutoGenerateDeepSeek();
+    return;
+  }
+
+  // Determine how many to publish today
+  // Phase 1: first 60 articles at 5/day (every day including weekends)
+  // Phase 2: remaining articles at 1/weekday
+  let toPublishToday;
+  if (publishedSoFar < PHASE_1_THRESHOLD) {
+    // Phase 1: publish up to 5 today (but don't exceed the 60 threshold)
+    toPublishToday = Math.min(PHASE_1_PER_DAY, PHASE_1_THRESHOLD - publishedSoFar, queued.length);
+    console.log(`[queue] Phase 1 (ramp-up): publishing ${toPublishToday} articles today`);
+  } else {
+    // Phase 2: 1/weekday only
+    const dayOfWeek = new Date().getUTCDay(); // 0=Sun, 6=Sat
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      console.log(`[queue] Phase 2: Weekend, skipping (Mon-Fri only)`);
+      console.log(`[queue] ═══════════════════════════════════════`);
+      return;
+    }
+    toPublishToday = Math.min(PHASE_2_PER_DAY, queued.length);
+    console.log(`[queue] Phase 2 (cruise): publishing ${toPublishToday} article today`);
+  }
+
+  // Publish the articles
+  let published = 0;
+  for (let i = 0; i < toPublishToday; i++) {
+    if (publishFromQueue(queued[i])) {
+      published++;
+    }
+  }
+
+  console.log(`[queue] Published ${published}/${toPublishToday} articles`);
+  console.log(`[queue] Queue remaining: ${queued.length - published}`);
+  console.log(`[queue] ═══════════════════════════════════════`);
+
+  if (published > 0) {
+    regenerateSitemap();
+  }
+}
+
+// DeepSeek fallback generation (only when queue is empty)
+async function dailyAutoGenerateDeepSeek() {
   const existingSlugs = getExistingSlugs();
   const count = getArticleCount();
-  console.log(`[auto-gen] Generation triggered. Current count: ${count}`);
+  console.log(`[auto-gen] DeepSeek fallback generation. Current count: ${count}`);
 
-  // Pick a random category
   const cat = randomPick(CATEGORIES);
   const pool = TOPIC_POOLS[cat] || [];
 
-  // Find an unused topic
   let topic = null;
   for (const t of pool.sort(() => Math.random() - 0.5)) {
     if (!existingSlugs.has(slugify(t))) {
@@ -890,7 +1039,6 @@ async function dailyAutoGenerate() {
   }
 
   if (!topic) {
-    // Generate a variation if all pool topics are used
     const baseTopic = randomPick(pool);
     topic = `${baseTopic} - a deeper look`;
     if (existingSlugs.has(slugify(topic))) {
@@ -898,14 +1046,11 @@ async function dailyAutoGenerate() {
     }
   }
 
-  // Use DeepSeek V4-Pro for generation
   const article = await generateArticleDeepSeek(topic, cat);
 
-  // Quality gate: validate before publishing
   const gate = runQualityGate(article.htmlContent);
   if (!gate.passed) {
     console.warn(`[auto-gen] Quality gate FAILED for "${topic}": ${gate.failures.join(' | ')}`);
-    // Retry once with template fallback
     const fallback = generateArticle(topic, cat);
     const gate2 = runQualityGate(fallback.htmlContent);
     if (gate2.passed) {
@@ -1257,45 +1402,24 @@ cron.schedule('0 5 0 * * *', () => {
 console.log('[cron] Sitemap: 0 5 0 * * * (daily 00:05 UTC)');
 
 if (AUTO_GEN_ENABLED) {
-  // ═══════════════════════════════════════════════════════════════
-  // SMART RAMP-UP CRON SCHEDULE
-  // Phase 1 (< 200 articles): 3/weekday at 08:00, 12:00, 17:00 UTC
-  // Phase 2 (>= 200 articles): 1/weekday at 08:00 UTC
-  // ═══════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════
+  // QUEUE-BASED PUBLISHING SCHEDULE
+  // Phase 1 (first 60): 5/day every day (including weekends)
+  // Phase 2 (remaining ~376): 1/weekday Mon-Fri
+  // Fallback: DeepSeek V4-Pro when queue is empty
+  // ═════════════════════════════════════════════════════════════
 
-  // cron-1a: Morning generation (always active)
-  cron.schedule('0 8 * * 1-5', () => {
-    dailyAutoGenerate().catch(e => console.error(`[cron] Gen 08:00 failed: ${e.message}`));
+  // cron-1: Daily publish from queue at 08:00 UTC (every day)
+  cron.schedule('0 8 * * *', () => {
+    dailyPublishFromQueue().catch(e => console.error(`[cron] Queue publish failed: ${e.message}`));
   }, { timezone: 'UTC' });
-  console.log('[cron] Article gen 08:00: 0 8 * * 1-5 (weekdays)');
+  console.log('[cron] Queue publish: 0 8 * * * (daily 08:00 UTC)');
 
-  // cron-1b: Midday generation (Phase 1 only: < 200 articles)
-  cron.schedule('0 12 * * 1-5', () => {
-    const count = getArticleCount();
-    if (count < 200) {
-      dailyAutoGenerate().catch(e => console.error(`[cron] Gen 12:00 failed: ${e.message}`));
-    } else {
-      console.log(`[cron] Skipping 12:00 gen (Phase 2: ${count} articles)`);
-    }
-  }, { timezone: 'UTC' });
-  console.log('[cron] Article gen 12:00: 0 12 * * 1-5 (Phase 1 only)');
-
-  // cron-1c: Afternoon generation (Phase 1 only: < 200 articles)
-  cron.schedule('0 17 * * 1-5', () => {
-    const count = getArticleCount();
-    if (count < 200) {
-      dailyAutoGenerate().catch(e => console.error(`[cron] Gen 17:00 failed: ${e.message}`));
-    } else {
-      console.log(`[cron] Skipping 17:00 gen (Phase 2: ${count} articles)`);
-    }
-  }, { timezone: 'UTC' });
-  console.log('[cron] Article gen 17:00: 0 17 * * 1-5 (Phase 1 only)');
-
-  // cron-2: Product spotlight Saturday at 08:00 UTC
-  cron.schedule('0 8 * * 6', () => {
+  // cron-2: Product spotlight Saturday at 08:30 UTC (offset to avoid collision)
+  cron.schedule('30 8 * * 6', () => {
     weeklyProductSpotlight().catch(e => console.error(`[cron] Spotlight failed: ${e.message}`));
   }, { timezone: 'UTC' });
-  console.log('[cron] Product spotlight: 0 8 * * 6 (Sat 08:00 UTC)');
+  console.log('[cron] Product spotlight: 30 8 * * 6 (Sat 08:30 UTC)');
 
   // cron-3: Monthly content refresh — 1st of every month at 03:00 UTC
   cron.schedule('0 3 1 * *', () => {
@@ -1315,25 +1439,27 @@ if (AUTO_GEN_ENABLED) {
   }, { timezone: 'UTC' });
   console.log('[cron] ASIN health: 0 5 * * 0 (Sun 05:00 UTC)');
 
-  const currentCount = getArticleCount();
-  const phase = currentCount < 200 ? '1 (RAMP-UP: 3/day)' : '2 (CRUISE: 1/day)';
+  const queueRemaining = getQueuedArticles().length;
+  const publishedFromQueue = getPublishedFromQueueCount();
+  const phase = publishedFromQueue < PHASE_1_THRESHOLD ? '1 (RAMP-UP: 5/day every day)' : '2 (CRUISE: 1/weekday Mon-Fri)';
   console.log('');
   console.log('=== THE SHATTERED ARMOR ===');
-  console.log('AUTO-GENERATION: ON (DeepSeek V4-Pro + node-cron)');
+  console.log('PUBLISHING: QUEUE-BASED + DeepSeek fallback');
   console.log(`  Phase: ${phase}`);
-  console.log('  cron-1: 08:00/12:00/17:00 UTC weekdays (smart ramp-up)');
-  console.log('  cron-2: 0 8 * * 6     — product spotlight Sat 08:00 UTC');
+  console.log(`  Queue remaining: ${queueRemaining} articles`);
+  console.log(`  Published from queue: ${publishedFromQueue}`);
+  console.log('  cron-1: 0 8 * * *     — daily queue publish (5/day or 1/weekday)');
+  console.log('  cron-2: 30 8 * * 6   — product spotlight Sat 08:30 UTC');
   console.log('  cron-3: 0 3 1 * *     — monthly refresh 25 articles');
   console.log('  cron-4: 0 4 1 1,4,7,10 * — quarterly revision 20 articles');
   console.log('  cron-5: 0 5 * * 0     — ASIN health check + auto-repair');
   console.log(`  Bunny CDN: ${BUNNY_CDN_HOST} (hardcoded)`);
   console.log(`  Image library: 40 images in /library/`);
-  console.log(`  Current articles: ${currentCount}`);
-  console.log(`  Topic pool: ${Object.values(TOPIC_POOLS).flat().length} topics`);
-  console.log(`  DeepSeek API: ${process.env.DEEPSEEK_API_KEY ? 'CONFIGURED' : 'NOT SET (template fallback)'}`);
+  console.log(`  Total articles: ${getArticleCount()}`);
+  console.log(`  DeepSeek API: ${process.env.DEEPSEEK_API_KEY ? 'CONFIGURED (fallback ready)' : 'NOT SET (queue-only mode)'}`);
   console.log('===========================');
 } else {
   console.log('AUTO-GENERATION: OFF');
 }
 
-console.log(`Server started. Publishing: date-gated. Auto-gen: ${AUTO_GEN_ENABLED ? 'ACTIVE' : 'INACTIVE'}`);
+console.log(`Server started. Publishing: queue-based. Auto-gen: ${AUTO_GEN_ENABLED ? 'ACTIVE' : 'INACTIVE'}`);
