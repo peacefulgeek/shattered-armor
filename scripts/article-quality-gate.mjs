@@ -167,12 +167,19 @@ export function voiceSignals(text) {
   const shortSentences = lengths.filter(l => l <= 6).length;
   const longSentences = lengths.filter(l => l >= 25).length;
 
-  // Conversational markers
+  // Conversational markers (Paul Voice Gate: Tender Guide register)
   const conversationalMarkers = [
     /\bhere's the thing\b/i, /\blook,\s/i, /\bhonestly,?\s/i, /\btruth is\b/i,
     /\bthe truth\b/i, /\bi'll tell you\b/i, /\bthink about it\b/i,
     /\bthat said\b/i, /\bbut here's\b/i, /\bso yeah\b/i, /\bkind of\b/i,
-    /\bsort of\b/i, /\byou know\b/i
+    /\bsort of\b/i, /\byou know\b/i,
+    // Paul Voice Gate additions: compassionate/connective markers
+    /\bright\?/i, /\bknow what i mean\b/i, /\bstay with me\b/i,
+    /\bwild,? right\b/i, /\bsit with that\b/i, /\bnotice what\b/i,
+    /\bhow does that\b/i, /\bfeel that\b/i, /\blet me be\b/i,
+    /\bhere's what\b/i, /\bi want you to\b/i, /\bcan you feel\b/i,
+    /\bthat's real\b/i, /\bthat's the thing\b/i, /\bi get it\b/i,
+    /\bi hear you\b/i, /\bthis is hard\b/i, /\bthis matters\b/i
   ];
   const markerCount = conversationalMarkers.filter(r => r.test(stripped)).length;
 
@@ -199,10 +206,10 @@ export function runQualityGate(body) {
   if (words < 1200) failures.push(`words-too-low:${words}`);
   if (words > 2500) failures.push(`words-too-high:${words}`);
 
-  // Amazon links
+  // Amazon links (3-4 inline + resource section = up to 8 total mentions)
   const links = countAmazonLinks(body);
   if (links < 3) failures.push(`amazon-links-too-few:${links}`);
-  if (links > 6) failures.push(`amazon-links-too-many:${links}`);
+  if (links > 12) failures.push(`amazon-links-too-many:${links}`);
 
   // Em-dash
   if (hasEmDash(body)) failures.push('contains-em-dash');
@@ -239,9 +246,9 @@ export function runQualityGate(body) {
     failures.push(`too-few-short-sentences:${voice.shortSentences}`);
   }
 
-  // Conversational markers
-  if (voice.conversationalMarkers < 2) {
-    warnings.push(`conversational-markers-low:${voice.conversationalMarkers}`);
+  // Conversational markers (Paul Voice Gate: min 3 required)
+  if (voice.conversationalMarkers < 3) {
+    failures.push(`conversational-markers-too-few:${voice.conversationalMarkers}`);
   }
 
   return {

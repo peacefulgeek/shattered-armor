@@ -1,24 +1,24 @@
 /**
  * Render start script — The Shattered Armor
- * All scheduling and content generation is IN-CODE. No external APIs.
- * No Manus. No Forge. No third-party LLM calls.
+ * DeepSeek V4-Pro powered content generation + Bunny CDN image library.
+ * No Claude. No Fal.ai. No GPT.
  *
- * Publishing schedule (dates baked into article JSON):
- *   - 30 articles: already published (Jan 1 - Mar 27, 2026)
- *   - 150 articles: 5/day from Mar 28 - Apr 26, 2026
- *   - 120 articles: 5/week from Apr 27 - Oct 5, 2026
+ * Writing engine: DeepSeek V4-Pro via OpenAI-compatible SDK
+ * Image strategy: 40 pre-generated library images rotated + duplicated per article
  *
- * Auto-generation (AUTO_GEN_ENABLED = true, node-cron):
- *   - cron-1: 0 6 * * 1-5   — Mon-Fri 06:00 UTC: 5 new articles from topic pool
- *   - cron-2: 0 8 * * 6     — Saturday 08:00 UTC: product spotlight article
- *   - cron-3: 0 3 1 * *     — 1st of month 03:00 UTC: refresh 25 articles
- *   - cron-4: 0 4 1 1,4,7,10 * — quarterly 04:00 UTC: revise 20 articles
- *   - cron-5: 0 5 * * 0     — Sunday 05:00 UTC: ASIN health check + auto-repair
+ * Smart Ramp-Up Cron Schedule:
+ *   Phase 1 (< 200 articles): 3/weekday at 08:00, 12:00, 17:00 UTC
+ *   Phase 2 (>= 200 articles): 1/weekday at 08:00 UTC
+ *   cron-2: 0 8 * * 6     — Saturday 08:00 UTC: product spotlight article
+ *   cron-3: 0 3 1 * *     — 1st of month 03:00 UTC: refresh 25 articles
+ *   cron-4: 0 4 1 1,4,7,10 * — quarterly 04:00 UTC: revise 20 articles
+ *   cron-5: 0 5 * * 0     — Sunday 05:00 UTC: ASIN health check + auto-repair
  *
  * Quality gate: article-quality-gate.mjs validates all new/refreshed articles
  * Amazon verify: amazon-verify.mjs with soft-404 detection for ASIN health
  *
  * Bunny CDN credentials hardcoded. No env vars needed.
+ * DeepSeek API key: process.env.DEEPSEEK_API_KEY
  */
 
 import { spawn } from 'child_process';
@@ -28,6 +28,8 @@ import https from 'https';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { runQualityGate, findFlaggedWords, AI_FLAGGED_WORDS } from './article-quality-gate.mjs';
+import { generateArticleHTML as deepseekGenerateHTML, generateRefreshContent } from './deepseek-writer.mjs';
+import { assignArticleImages } from './bunny-image-library.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -461,6 +463,27 @@ function getExistingSlugs() {
   return slugs;
 }
 
+function getNextArticleId() {
+  const slugMapPath = path.join(__dirname, '..', 'client', 'src', 'data', 'slug-map.json');
+  try {
+    const slugMap = JSON.parse(fs.readFileSync(slugMapPath, 'utf-8'));
+    return Math.max(...Object.values(slugMap), 0) + 1;
+  } catch (e) {
+    return 999;
+  }
+}
+
+function registerSlugId(slug, id) {
+  const slugMapPath = path.join(__dirname, '..', 'client', 'src', 'data', 'slug-map.json');
+  try {
+    const slugMap = JSON.parse(fs.readFileSync(slugMapPath, 'utf-8'));
+    slugMap[slug] = id;
+    fs.writeFileSync(slugMapPath, JSON.stringify(slugMap, null, 2));
+  } catch (e) {
+    console.error(`[auto-gen] slug-map update failed: ${e.message}`);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // IN-CODE ARTICLE GENERATOR — No external APIs
 // ═══════════════════════════════════════════════════════════════════════
@@ -608,13 +631,55 @@ function generateArticleHTML(title, category) {
   return html;
 }
 
-function generateArticle(title, category) {
+/**
+ * Generate article via DeepSeek V4-Pro with Bunny CDN image rotation.
+ * Falls back to template-based generation if DeepSeek API fails.
+ */
+async function generateArticleDeepSeek(title, category) {
   const slug = slugify(title);
   const now = new Date();
-  const htmlContent = generateArticleHTML(title, category);
+  const id = getNextArticleId();
+  const ref = randomPick(RESEARCHERS);
+
+  // Select products for this article
+  const matchingProducts = PRODUCT_RECS.filter(p => p.cat.includes(category));
+  const selectedProducts = randomPick(
+    matchingProducts.length >= 4 ? matchingProducts : PRODUCT_RECS,
+    4
+  );
+  const products = Array.isArray(selectedProducts) ? selectedProducts : [selectedProducts];
+
+  // Try DeepSeek V4-Pro first
+  let htmlContent;
+  try {
+    if (!process.env.DEEPSEEK_API_KEY) {
+      throw new Error('DEEPSEEK_API_KEY not set');
+    }
+    htmlContent = await deepseekGenerateHTML(title, category, products, 'spankyspinola-20');
+    console.log(`[deepseek] Generated article: ${slug}`);
+  } catch (err) {
+    console.warn(`[deepseek] API failed for "${title}": ${err.message}. Falling back to template.`);
+    htmlContent = generateArticleHTML(title, category);
+  }
+
+  // Assign images from Bunny CDN library
+  let heroImage, ogImage;
+  try {
+    const images = await assignArticleImages(slug);
+    heroImage = images.heroImage;
+    ogImage = images.ogImage;
+  } catch (err) {
+    console.warn(`[bunny-lib] Image assignment failed: ${err.message}`);
+    heroImage = `https://${BUNNY_CDN_HOST}/images/hero-default.webp`;
+    ogImage = `https://${BUNNY_CDN_HOST}/images/og-default.webp`;
+  }
+
   const wordCount = htmlContent.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
+  const excerpt = htmlContent.replace(/<[^>]+>/g, ' ').slice(0, 160).trim() + '...';
+  const metaDescription = htmlContent.replace(/<[^>]+>/g, ' ').slice(0, 155).trim() + '...';
 
   return {
+    id,
     slug,
     title,
     category,
@@ -622,15 +687,64 @@ function generateArticle(title, category) {
     dateISO: now.toISOString(),
     author: 'Kalesh',
     authorUrl: 'https://kalesh.love',
-    excerpt: htmlContent.replace(/<[^>]+>/g, ' ').slice(0, 160).trim() + '...',
+    excerpt,
+    metaDescription,
     htmlContent,
     wordCount,
+    generatedWordCount: wordCount,
+    readingTime: Math.max(1, Math.round(wordCount / 250)),
+    heroImage,
+    ogImage,
+    openerType: 'researcher-lead',
+    faqCount: 0,
+    backlinkType: 'category',
+    conclusionType: 'open-ended',
+    researcherName: ref.name,
+    researcherTopic: ref.field,
+    externalSites: [],
+    phraseIndices: [],
+    tags: [category],
+    hasAffiliateLinks: true,
+  };
+}
+
+// Legacy template-based generator (kept as fallback)
+function generateArticle(title, category) {
+  const slug = slugify(title);
+  const now = new Date();
+  const id = getNextArticleId();
+  const ref = randomPick(RESEARCHERS);
+  const htmlContent = generateArticleHTML(title, category);
+  const wordCount = htmlContent.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
+  const excerpt = htmlContent.replace(/<[^>]+>/g, ' ').slice(0, 160).trim() + '...';
+
+  return {
+    id,
+    slug,
+    title,
+    category,
+    categoryName: CATEGORY_NAMES[category] || category,
+    dateISO: now.toISOString(),
+    author: 'Kalesh',
+    authorUrl: 'https://kalesh.love',
+    excerpt,
+    metaDescription: excerpt,
+    htmlContent,
+    wordCount,
+    generatedWordCount: wordCount,
     readingTime: Math.max(1, Math.round(wordCount / 250)),
     heroImage: `https://${BUNNY_CDN_HOST}/images/hero-default.webp`,
     ogImage: `https://${BUNNY_CDN_HOST}/images/og-default.webp`,
+    openerType: 'researcher-lead',
+    faqCount: 0,
+    backlinkType: 'category',
+    conclusionType: 'open-ended',
+    researcherName: ref.name,
+    researcherTopic: ref.field,
+    externalSites: [],
+    phraseIndices: [],
     tags: [category],
     hasAffiliateLinks: true,
-    faqCount: 0,
   };
 }
 
@@ -655,7 +769,13 @@ function publishArticle(article) {
     path.join(__dirname, '..', 'client', 'public', 'data', 'articles-index.json'),
   ];
 
+  // Register in slug-map
+  if (article.id) {
+    registerSlugId(article.slug, article.id);
+  }
+
   const indexEntry = {
+    id: article.id || 0,
     slug: article.slug,
     title: article.title,
     category: article.category,
@@ -663,6 +783,7 @@ function publishArticle(article) {
     dateISO: article.dateISO,
     author: 'Kalesh',
     excerpt: article.excerpt,
+    metaDescription: article.metaDescription || article.excerpt,
     wordCount: article.wordCount,
     readingTime: article.readingTime,
     heroImage: article.heroImage,
@@ -747,70 +868,76 @@ function regenerateSitemap() {
   }
 }
 
-// Daily: generate 5 new articles
-function dailyAutoGenerate() {
+// Smart ramp-up: generate 1 article per call (called 3x/day < 200, 1x/day >= 200)
+async function dailyAutoGenerate() {
   if (!AUTO_GEN_ENABLED) return;
 
   const existingSlugs = getExistingSlugs();
   const count = getArticleCount();
-  console.log(`[auto-gen] Daily generation triggered. Current count: ${count}`);
+  console.log(`[auto-gen] Generation triggered. Current count: ${count}`);
 
-  // Rotate through categories evenly
-  const categoryRotation = [...CATEGORIES].sort(() => Math.random() - 0.5);
-  let generated = 0;
+  // Pick a random category
+  const cat = randomPick(CATEGORIES);
+  const pool = TOPIC_POOLS[cat] || [];
 
-  for (let i = 0; i < 5; i++) {
-    const cat = categoryRotation[i % CATEGORIES.length];
-    const pool = TOPIC_POOLS[cat] || [];
-
-    // Find an unused topic
-    let topic = null;
-    for (const t of pool.sort(() => Math.random() - 0.5)) {
-      if (!existingSlugs.has(slugify(t))) {
-        topic = t;
-        break;
-      }
-    }
-
-    if (!topic) {
-      console.log(`[auto-gen] No unused topics left for ${cat}`);
-      continue;
-    }
-
-    const article = generateArticle(topic, cat);
-    // Quality gate: validate before publishing
-    const gate = runQualityGate(article.htmlContent);
-    if (!gate.passed) {
-      console.warn(`[auto-gen] Quality gate FAILED for "${topic}": ${gate.failures.join(' | ')}`);
-      // Try once more with a different topic
-      continue;
-    }
-    if (publishArticle(article)) {
-      existingSlugs.add(article.slug);
-      generated++;
-      console.log(`[auto-gen] Quality gate PASSED: ${article.slug} (${gate.wordCount} words, ${gate.amazonLinks} links)`);
+  // Find an unused topic
+  let topic = null;
+  for (const t of pool.sort(() => Math.random() - 0.5)) {
+    if (!existingSlugs.has(slugify(t))) {
+      topic = t;
+      break;
     }
   }
 
-  if (generated > 0) {
+  if (!topic) {
+    // Generate a variation if all pool topics are used
+    const baseTopic = randomPick(pool);
+    topic = `${baseTopic} - a deeper look`;
+    if (existingSlugs.has(slugify(topic))) {
+      topic = `${baseTopic} - what nobody tells you`;
+    }
+  }
+
+  // Use DeepSeek V4-Pro for generation
+  const article = await generateArticleDeepSeek(topic, cat);
+
+  // Quality gate: validate before publishing
+  const gate = runQualityGate(article.htmlContent);
+  if (!gate.passed) {
+    console.warn(`[auto-gen] Quality gate FAILED for "${topic}": ${gate.failures.join(' | ')}`);
+    // Retry once with template fallback
+    const fallback = generateArticle(topic, cat);
+    const gate2 = runQualityGate(fallback.htmlContent);
+    if (gate2.passed) {
+      fallback.heroImage = article.heroImage;
+      fallback.ogImage = article.ogImage;
+      if (publishArticle(fallback)) {
+        console.log(`[auto-gen] Published (template fallback): ${fallback.slug}`);
+        regenerateSitemap();
+      }
+    } else {
+      console.error(`[auto-gen] Both DeepSeek and template failed for "${topic}"`);
+    }
+    return;
+  }
+
+  if (publishArticle(article)) {
+    console.log(`[auto-gen] Quality gate PASSED: ${article.slug} (${gate.wordCount} words, ${gate.amazonLinks} links)`);
     regenerateSitemap();
   }
-  console.log(`[auto-gen] Daily batch complete: ${generated} articles`);
 }
 
 // Weekly Saturday: product spotlight
-function weeklyProductSpotlight() {
+async function weeklyProductSpotlight() {
   if (!AUTO_GEN_ENABLED) return;
 
   console.log('[auto-gen] Weekly product spotlight triggered');
   const cat = randomPick(CATEGORIES);
-  const products = PRODUCT_RECS.filter(p => p.cat.includes(cat));
-  const featured = randomPick(products.length > 0 ? products : PRODUCT_RECS, 3);
 
   const title = `Recovery tools worth knowing about this week`;
   const slug = slugify(title + '-' + Date.now().toString(36));
 
-  const article = generateArticle(title, cat);
+  const article = await generateArticleDeepSeek(title, cat);
   article.slug = slug;
   publishArticle(article);
   regenerateSitemap();
@@ -1130,15 +1257,43 @@ cron.schedule('0 5 0 * * *', () => {
 console.log('[cron] Sitemap: 0 5 0 * * * (daily 00:05 UTC)');
 
 if (AUTO_GEN_ENABLED) {
-  // cron-1: Article generation Mon-Fri at 06:00 UTC
-  cron.schedule('0 6 * * 1-5', () => {
-    try { dailyAutoGenerate(); } catch (e) { console.error(`[cron] Daily gen failed: ${e.message}`); }
+  // ═══════════════════════════════════════════════════════════════
+  // SMART RAMP-UP CRON SCHEDULE
+  // Phase 1 (< 200 articles): 3/weekday at 08:00, 12:00, 17:00 UTC
+  // Phase 2 (>= 200 articles): 1/weekday at 08:00 UTC
+  // ═══════════════════════════════════════════════════════════════
+
+  // cron-1a: Morning generation (always active)
+  cron.schedule('0 8 * * 1-5', () => {
+    dailyAutoGenerate().catch(e => console.error(`[cron] Gen 08:00 failed: ${e.message}`));
   }, { timezone: 'UTC' });
-  console.log('[cron] Article gen: 0 6 * * 1-5 (weekdays 06:00 UTC)');
+  console.log('[cron] Article gen 08:00: 0 8 * * 1-5 (weekdays)');
+
+  // cron-1b: Midday generation (Phase 1 only: < 200 articles)
+  cron.schedule('0 12 * * 1-5', () => {
+    const count = getArticleCount();
+    if (count < 200) {
+      dailyAutoGenerate().catch(e => console.error(`[cron] Gen 12:00 failed: ${e.message}`));
+    } else {
+      console.log(`[cron] Skipping 12:00 gen (Phase 2: ${count} articles)`);
+    }
+  }, { timezone: 'UTC' });
+  console.log('[cron] Article gen 12:00: 0 12 * * 1-5 (Phase 1 only)');
+
+  // cron-1c: Afternoon generation (Phase 1 only: < 200 articles)
+  cron.schedule('0 17 * * 1-5', () => {
+    const count = getArticleCount();
+    if (count < 200) {
+      dailyAutoGenerate().catch(e => console.error(`[cron] Gen 17:00 failed: ${e.message}`));
+    } else {
+      console.log(`[cron] Skipping 17:00 gen (Phase 2: ${count} articles)`);
+    }
+  }, { timezone: 'UTC' });
+  console.log('[cron] Article gen 17:00: 0 17 * * 1-5 (Phase 1 only)');
 
   // cron-2: Product spotlight Saturday at 08:00 UTC
   cron.schedule('0 8 * * 6', () => {
-    try { weeklyProductSpotlight(); } catch (e) { console.error(`[cron] Spotlight failed: ${e.message}`); }
+    weeklyProductSpotlight().catch(e => console.error(`[cron] Spotlight failed: ${e.message}`));
   }, { timezone: 'UTC' });
   console.log('[cron] Product spotlight: 0 8 * * 6 (Sat 08:00 UTC)');
 
@@ -1160,17 +1315,22 @@ if (AUTO_GEN_ENABLED) {
   }, { timezone: 'UTC' });
   console.log('[cron] ASIN health: 0 5 * * 0 (Sun 05:00 UTC)');
 
+  const currentCount = getArticleCount();
+  const phase = currentCount < 200 ? '1 (RAMP-UP: 3/day)' : '2 (CRUISE: 1/day)';
   console.log('');
   console.log('=== THE SHATTERED ARMOR ===');
-  console.log('AUTO-GENERATION: ON (node-cron, no setTimeout overflow)');
-  console.log('  cron-1: 0 6 * * 1-5   — 5 new articles weekdays 06:00 UTC');
+  console.log('AUTO-GENERATION: ON (DeepSeek V4-Pro + node-cron)');
+  console.log(`  Phase: ${phase}`);
+  console.log('  cron-1: 08:00/12:00/17:00 UTC weekdays (smart ramp-up)');
   console.log('  cron-2: 0 8 * * 6     — product spotlight Sat 08:00 UTC');
   console.log('  cron-3: 0 3 1 * *     — monthly refresh 25 articles');
   console.log('  cron-4: 0 4 1 1,4,7,10 * — quarterly revision 20 articles');
   console.log('  cron-5: 0 5 * * 0     — ASIN health check + auto-repair');
   console.log(`  Bunny CDN: ${BUNNY_CDN_HOST} (hardcoded)`);
-  console.log(`  Current articles: ${getArticleCount()}`);
+  console.log(`  Image library: 40 images in /library/`);
+  console.log(`  Current articles: ${currentCount}`);
   console.log(`  Topic pool: ${Object.values(TOPIC_POOLS).flat().length} topics`);
+  console.log(`  DeepSeek API: ${process.env.DEEPSEEK_API_KEY ? 'CONFIGURED' : 'NOT SET (template fallback)'}`);
   console.log('===========================');
 } else {
   console.log('AUTO-GENERATION: OFF');
