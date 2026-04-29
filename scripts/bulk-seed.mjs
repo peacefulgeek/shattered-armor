@@ -4,7 +4,7 @@
  * Generates 500 articles via DeepSeek V4-Pro with Bunny CDN image rotation.
  * Writes directly to the JSON file system.
  * 
- * Usage: DEEPSEEK_API_KEY=sk-xxx node scripts/bulk-seed.mjs
+ * Usage: OPENAI_API_KEY=sk-xxx OPENAI_BASE_URL=https://api.deepseek.com OPENAI_MODEL=deepseek-v4-pro node scripts/bulk-seed.mjs
  * 
  * Features:
  * - DeepSeek V4-Pro with 3 retries per article
@@ -705,8 +705,8 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════');
   console.log('');
 
-  if (!process.env.DEEPSEEK_API_KEY) {
-    console.error('ERROR: DEEPSEEK_API_KEY not set. Exiting.');
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('ERROR: OPENAI_API_KEY not set. Exiting.');
     process.exit(1);
   }
 

@@ -24,7 +24,7 @@
  * Amazon verify: amazon-verify.mjs with soft-404 detection for ASIN health
  *
  * Bunny CDN credentials hardcoded. No env vars needed.
- * DeepSeek API key: process.env.DEEPSEEK_API_KEY (only needed when queue is empty)
+ * DeepSeek API key: process.env.OPENAI_API_KEY (only needed when queue is empty)
  */
 
 import { spawn } from 'child_process';
@@ -658,8 +658,8 @@ async function generateArticleDeepSeek(title, category) {
   // Try DeepSeek V4-Pro first
   let htmlContent;
   try {
-    if (!process.env.DEEPSEEK_API_KEY) {
-      throw new Error('DEEPSEEK_API_KEY not set');
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY not set');
     }
     htmlContent = await deepseekGenerateHTML(title, category, products, 'spankyspinola-20');
     console.log(`[deepseek] Generated article: ${slug}`);
@@ -1456,7 +1456,7 @@ if (AUTO_GEN_ENABLED) {
   console.log(`  Bunny CDN: ${BUNNY_CDN_HOST} (hardcoded)`);
   console.log(`  Image library: 40 images in /library/`);
   console.log(`  Total articles: ${getArticleCount()}`);
-  console.log(`  DeepSeek API: ${process.env.DEEPSEEK_API_KEY ? 'CONFIGURED (fallback ready)' : 'NOT SET (queue-only mode)'}`);
+  console.log(`  DeepSeek API: ${process.env.OPENAI_API_KEY ? 'CONFIGURED (fallback ready)' : 'NOT SET (queue-only mode)'}`);
   console.log('===========================');
 } else {
   console.log('AUTO-GENERATION: OFF');

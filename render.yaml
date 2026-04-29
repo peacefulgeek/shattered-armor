@@ -10,7 +10,13 @@ services:
         value: production
       - key: PORT
         value: "10000"
-      - key: DEEPSEEK_API_KEY
+      - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_BASE_URL
+        value: "https://api.deepseek.com"
+      - key: OPENAI_MODEL
+        value: "deepseek-v4-pro"
+      - key: AUTO_GEN_ENABLED
+        value: "true"
     healthCheckPath: /health
     autoDeploy: true

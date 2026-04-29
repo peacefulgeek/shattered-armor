@@ -4,20 +4,20 @@
  * Replaces the template-based generateArticleHTML() with real AI-generated content.
  * Uses the OpenAI-compatible SDK pointed at DeepSeek's API.
  * 
- * Model: deepseek-v4-pro (hardcoded, not from env)
- * Auth: process.env.DEEPSEEK_API_KEY
- * Base URL: https://api.deepseek.com (hardcoded)
+ * Model: process.env.OPENAI_MODEL (default: deepseek-v4-pro)
+ * Auth: process.env.OPENAI_API_KEY
+ * Base URL: process.env.OPENAI_BASE_URL (default: https://api.deepseek.com)
  */
 
 import OpenAI from 'openai';
 
 // ─── DEEPSEEK CLIENT ────────────────────────────────────────────────
 const deepseek = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: 'https://api.deepseek.com',
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL || 'https://api.deepseek.com',
 });
 
-const MODEL = 'deepseek-chat';
+const MODEL = process.env.OPENAI_MODEL || 'deepseek-v4-pro';
 
 // ─── KALESH VOICE SYSTEM PROMPT ─────────────────────────────────────
 const SYSTEM_PROMPT = `You are Kalesh, a writer who covers complex trauma, nervous system science, and recovery. You write for The Shattered Armor (shatteredarmor.com).
